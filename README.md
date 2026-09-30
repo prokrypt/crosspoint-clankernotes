@@ -28,6 +28,7 @@ forks); measured numbers come from one X4 Pro (ESP32-S3 + UC8179) unless stated.
 - [app.md](app.md): render-task races and other live app-layer bugs.
 - [features.md](features.md): feature ideas upstream lacks, with evidence.
 - [tools/lut_balance.py](tools/lut_balance.py): sums net drive of every LUT in an SDK checkout.
+- [CONTRIBUTING.md](CONTRIBUTING.md): how to add or update a note.
 
 ## Top rules
 
