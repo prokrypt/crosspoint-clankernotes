@@ -13,6 +13,16 @@ Gate RTC/noinit data with a magic word and range checks
 FAST memory is also heap (`ALLOW_RTC_FAST_MEM_AS_HEAP`), so every RTC_NOINIT
 byte comes out of the heap; the 16x256 log ring alone is 4 KB.
 
+RTC_NOINIT also survives OTA, SD and USB flashes, so the next firmware
+(possibly a different fork) reads the old bytes. Magics are shared across
+forks with different meanings: silent-restart magic `0xC1EAB007` target 2 is
+Settings in `cp` but OTA in `ci` (`cp src/main.cpp:140-147`,
+`ci src/SilentRestart.h:11-12`, `ci src/main.cpp:343`); log ring `0xDEADBEEF`
+is in both (`ci lib/Logging/Logging.cpp:31`). Safe today only because each
+firmware reads and clears at boot. For new RTC data use one struct per
+feature with a unique magic, version, size and CRC, and clear it on
+`ESP_RST_POWERON`.
+
 ## 2. S3 PSRAM address 0 is overwritten every boot
 
 MSPI timing tuning (octal PSRAM > 40 MHz) writes a 64 B test pattern at
@@ -84,6 +94,15 @@ RTC ring even with no USB host (`cp lib/Logging/Logging.cpp:39-74`). Disabled
 levels compile out and don't evaluate arguments: no side effects inside
 `LOG_*`. HWCDC TX timeout is 1 ms on purpose (`cp src/main.cpp:440-441`); don't
 raise it. Keep INF out of per-frame and per-page paths.
+
+Release logs miss what you need and keep what you don't:
+- OPDS parse errors are DBG only, so a bad feed logs nothing in release
+  (`cp lib/OpdsParser/OpdsParser.cpp:57`, `ci :65`).
+- `ci` logs HTTP status errors without the URL; 401 and 404 look alike
+  (`ci src/network/HttpDownloader.cpp:229`, `:332`).
+- `cp` logs the full URL (query included) at ERR, and the ring lands in
+  the crash report (`cp src/network/HttpDownloader.cpp:60`). Strip userinfo
+  and query before logging URLs.
 
 ## 9. Images re-decoded every render
 
