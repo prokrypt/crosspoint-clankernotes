@@ -119,3 +119,10 @@ Upstream idle saving only lowers the CPU clock (80 MHz S3 / 10 MHz C3 after
 No `esp_pm_configure` / light sleep anywhere. If you add PM, the loop tick
 rate sets the wake rate [fork: ~30 wakes/s on an idle transfer screen], and
 power saving must never add input or draw latency on interactive screens.
+
+X4 Pro has no VBUS pin (`usbDetect` unassigned, `fi BoardConfig.h:1667`).
+A PC shows up only through native-USB enumeration; a wall charger shows up
+only through charger STAT on GPIO21, high while charging (`:1665`). STAT
+reads not-charging once the battery is full, so `cp` (which falls back to
+"USB connected = charging") reports a full device on a charger as unplugged
+(`cp lib/hal/HalGPIO.cpp:271-279`). Don't use it to gate charger-only logic.
