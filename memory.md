@@ -126,3 +126,27 @@ only through charger STAT on GPIO21, high while charging (`:1665`). STAT
 reads not-charging once the battery is full, so `cp` (which falls back to
 "USB connected = charging") reports a full device on a charger as unplugged
 (`cp lib/hal/HalGPIO.cpp:271-279`). Don't use it to gate charger-only logic.
+
+## Latent ESP32-S3 gotchas (no current upstream trigger)
+
+These were hit in a fork. Upstream doesn't trip them today: it never light
+sleeps (no `esp_light_sleep_start` / `gpio_wakeup_enable` /
+`esp_pm_configure` in `cp`, `ci`, `fi`). Its only GPIO interrupts are edge
+ones, BUSY on CHANGE (`fi libs/display/FreeInkDisplay/src/bus/EpdBus.cpp:374`)
+and touch on FALLING (`fi libs/hardware/InputManager/src/InputManager.cpp:1523`).
+Read this before adding either.
+
+- **RTC IO light-sleep wakes survive `esp_restart()` and deep sleep.** Only a
+  chip reset clears them. A pin armed in an earlier run and not re-armed now
+  makes every light sleep reject (`rjc=0x4`) until power-on. Trips when you
+  arm RTC IO light-sleep wakes. Fix: clear all RTC IO wake enables at boot.
+  [fork] CrossDink 81ee250.
+- **`esp_restart()` and panics keep GPIO interrupt-enable bits.** They reset
+  only the CPUs. If `gpio_install_isr_service()` runs while a level-triggered
+  pin from the last run is still enabled and asserted, the service loops on
+  it with no handler. The result is an INT_WDT panic on every boot until a
+  power cycle. Trips when any level interrupt is used (seen with the X4 Pro
+  charger STAT on GPIO21). Fix: disable every pin's interrupt before
+  installing the service. [fork] CrossDink a824cb8. Untested: a fork that
+  arms a level interrupt, then switching to `cp`/`ci` with no power cycle,
+  may hit this on their edge-interrupt setup.
