@@ -78,3 +78,31 @@ twice in one pass (`:238-250`). Store edges in locals.
 - `GfxRenderer::clearScreen()` clears the display's live buffer, not a
   swapped-in `frameBuffer` (`cp lib/GfxRenderer/GfxRenderer.cpp:1677-1683`).
   Clear offscreen buffers yourself.
+
+## 10. `ci`: option popup hangs on a one-line note
+
+`BaseTheme::drawOptionPopup` pads the note area with
+`while (noteLines.size() < 2) y += noteLineHeight;`, which never exits when
+the note wraps to one line (`ci src/components/themes/BaseTheme.cpp:1273`;
+added in 3b8caae4, shipped in 1.5.1). `OptionPopup` sizes the dialog to the
+note's full width, capped at page width minus margins
+(`src/components/OptionPopup.h:360-375`), so any note narrower than that
+fits on one line. The only upstream note today is the touchscreen
+escape-hatch note on touch devices (`src/activities/settings/SettingsActivity.cpp:572`).
+By Inter 10 advance widths it wraps in portrait, but fits on one line on an
+800 px landscape page in Swedish, Turkish, Vietnamese and Hebrew. Settings
+keeps a landscape reader's orientation (`SettingsActivity.cpp:729-731`). A
+fork that hit it saw the render task spin at 100%. Fix: drop the loop and
+add `(2 - noteLines.size()) * noteLineHeight`. Not in `cp`.
+
+## 11. `usedBytes()` walks the whole FAT
+
+`Storage.usedBytes()` calls SdFat `freeClusterCount()` (`fi` pin
+`SDCardManager.cpp:469-487`, 20 s cache). With the default
+`MAINTAIN_FREE_CLUSTER_COUNT 0`, FAT32 reads every FAT sector and exFAT the
+whole allocation bitmap (SdFat `FatPartition.cpp:329-357`,
+`ExFatPartition.cpp:239`). `ci` calls it on the loop when accepting a Nearby
+transfer (`src/activities/network/NearbyBookTransferActivity.cpp:411`) and
+in the OTA space check (`src/network/OtaUpdater.cpp:433`). [fork] An
+8.35 s loop stall on Nearby Accept, attributed to this call by elimination.
+Keep it off interactive paths: run it in a worker, or cache it once per mount.
